@@ -29,6 +29,9 @@ the **Sanity App SDK** for real functionality, not as checkbox features.
   (the App SDK): live cross-incident MTTR, open incidents by severity, and a
   panel to approve pending escalations directly — reusing the same
   server-enforced gate as the incident page, not a separate write path.
+- **Related runbooks** — the incident page pulls in any `runbook` document
+  tagged for that severity (or explicitly linked to the incident) and renders
+  its steps inline, so a responder doesn't have to leave the page.
 - **Dark mode + Studio shortcut** in the app header; login form is pre-filled
   with demo credentials for judges.
 

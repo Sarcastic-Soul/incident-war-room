@@ -88,6 +88,21 @@ export const pendingEscalationApprovalsForIncidentQuery = defineQuery(`
 `);
 
 /**
+ * Runbooks relevant to a specific incident: either tagged with its current
+ * severity, or explicitly linked to it via `linkedIncidents`.
+ */
+export const runbooksForIncidentQuery = defineQuery(`
+  *[
+    _type == "runbook" &&
+    ($severity in applicableSeverity || references($incidentId))
+  ] | order(title asc) {
+    _id,
+    title,
+    steps
+  }
+`);
+
+/**
  * All responders.
  */
 export const allRespondersQuery = defineQuery(`

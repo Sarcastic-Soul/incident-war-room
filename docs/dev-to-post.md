@@ -15,8 +15,9 @@ Replace every [PLACEHOLDER: ...] before publishing.
 ## What it is
 
 Incident War Room is a real-time incident-management app: a live timeline per
-incident, a severity-escalation approval gate, AI-drafted postmortems, and a
-custom ops dashboard inside Sanity Studio. Built with Next.js 16 (App Router)
+incident, a severity-escalation approval gate, AI-drafted postmortems,
+related runbooks surfaced by severity, and a custom ops dashboard inside
+Sanity Studio. Built with Next.js 16 (App Router)
 on the front end and Sanity as the backend, for the dev.to × Sanity Path Two
 challenge — prompt an AI-native IDE to build a working Next.js/Astro + Sanity
 app, with bonus points for real use of **Sanity Workflows** and the

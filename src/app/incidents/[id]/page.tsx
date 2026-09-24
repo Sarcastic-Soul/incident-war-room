@@ -5,7 +5,9 @@ import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
+import { PortableText, type PortableTextBlock } from "@portabletext/react";
 import { client } from "@/sanity/lib/client";
+import { runbooksForIncidentQuery } from "@/sanity/lib/queries";
 import { formatDateTime, severityBadgeClass, statusBadgeClass } from "../badge-utils";
 import type {
   EscalationApproval,
@@ -46,6 +48,12 @@ type PostmortemSummary = {
   timelineEntryCount: number;
 };
 
+type RunbookSummary = {
+  _id: string;
+  title: string;
+  steps?: PortableTextBlock[] | null;
+};
+
 export default async function IncidentDetailPage({
   params,
 }: {
@@ -65,6 +73,11 @@ export default async function IncidentDetailPage({
   if (!incident) {
     notFound();
   }
+
+  const relatedRunbooks = await client.fetch<RunbookSummary[]>(
+    runbooksForIncidentQuery,
+    { severity: incident.severity, incidentId: id },
+  );
 
   const canRaiseToSev1 =
     incident.severity !== "SEV1" && incident.status !== "resolved";
@@ -250,6 +263,36 @@ export default async function IncidentDetailPage({
           </div>
         </section>
       )}
+
+      <section className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          Related runbooks
+        </h2>
+        {relatedRunbooks.length === 0 ? (
+          <p className="text-sm text-zinc-500 dark:text-zinc-500">
+            No runbooks linked for this severity — add one in Studio.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {relatedRunbooks.map((runbook) => (
+              <div key={runbook._id}>
+                <h3 className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                  {runbook.title}
+                </h3>
+                {runbook.steps && runbook.steps.length > 0 ? (
+                  <div className="mt-1 flex flex-col gap-2 text-sm text-zinc-700 dark:text-zinc-300 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5">
+                    <PortableText value={runbook.steps} />
+                  </div>
+                ) : (
+                  <p className="text-sm text-zinc-500 dark:text-zinc-500">
+                    No steps documented — edit in the Studio.
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold tracking-tight">Timeline</h2>
