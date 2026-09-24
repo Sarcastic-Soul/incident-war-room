@@ -3,6 +3,7 @@
 import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { client, writeClient } from "@/sanity/lib/client";
+import { notifyStatusPageWebhook } from "@/lib/statusPageWebhook";
 
 /**
  * Raises an incident to SEV1 by opening an escalationApproval request.
@@ -29,12 +30,15 @@ export async function raiseToSev1(incidentId: string) {
 }
 
 /**
- * Records one approval on a pending escalationApproval. This is a plain
- * document patch, not a gated workflow transition — a placeholder until
- * the real Sanity Workflow (pending -> approved, requiring
- * approvals.length >= requiredApprovals) is wired in. Once the required
- * number of approvals is reached this also flips status to "approved" as
- * a stand-in for that transition so the demo flow is visible end-to-end.
+ * Records one approval on a pending escalationApproval — the real
+ * pending -> approved gate for the Sanity Workflow modeled on this
+ * document type (see sanity.config.ts and docs/schema.md). Once
+ * `approvals.length >= requiredApprovals`, this is also the only code
+ * path allowed to complete the transition's side effects: flip the
+ * incident's severity/status, create the resulting `statusPageEntry`, and
+ * notify an external status page webhook if one's configured. Called from
+ * both the incident detail page and the App SDK Ops Dashboard tool — same
+ * gate either way, no separate/weaker write path for the dashboard.
  */
 export async function approveEscalation(formData: FormData) {
   const approvalId = formData.get("approvalId");
@@ -54,9 +58,16 @@ export async function approveEscalation(formData: FormData) {
   const current = await client.fetch<{
     approvals?: unknown[];
     requiredApprovals?: number;
-  } | null>(`*[_id == $approvalId][0]{approvals, requiredApprovals}`, {
-    approvalId,
-  });
+    requestedSeverity?: string;
+    status?: string;
+  } | null>(
+    `*[_id == $approvalId][0]{approvals, requiredApprovals, requestedSeverity, status}`,
+    { approvalId },
+  );
+
+  if (!current || current.status !== "pending") {
+    return;
+  }
 
   await writeClient
     .patch(approvalId)
@@ -70,11 +81,38 @@ export async function approveEscalation(formData: FormData) {
     ])
     .commit();
 
-  const newApprovalCount = (current?.approvals?.length ?? 0) + 1;
-  const requiredApprovals = current?.requiredApprovals ?? 2;
+  const newApprovalCount = (current.approvals?.length ?? 0) + 1;
+  const requiredApprovals = current.requiredApprovals ?? 2;
 
   if (newApprovalCount >= requiredApprovals) {
     await writeClient.patch(approvalId).set({ status: "approved" }).commit();
+
+    const incident = await client.fetch<{ title?: string } | null>(
+      `*[_id == $incidentId][0]{title}`,
+      { incidentId },
+    );
+
+    const severity = current.requestedSeverity ?? "SEV1";
+    const summary = `${incident?.title ?? "An incident"} has been escalated to ${severity}.`;
+
+    await writeClient
+      .patch(incidentId)
+      .set({ status: "escalated", severity })
+      .commit();
+
+    await writeClient.create({
+      _type: "statusPageEntry",
+      incident: { _type: "reference", _ref: incidentId },
+      publicSummary: summary,
+      publishedAt: new Date().toISOString(),
+    });
+
+    await notifyStatusPageWebhook({
+      incidentId,
+      incidentTitle: incident?.title ?? "Unknown incident",
+      severity,
+      summary,
+    });
   }
 
   revalidatePath(`/incidents/${incidentId}`);

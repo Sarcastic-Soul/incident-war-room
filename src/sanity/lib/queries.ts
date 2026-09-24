@@ -125,6 +125,17 @@ export const opsDashboardQuery = defineQuery(`
       "SEV3": count(*[_type == "incident" && status != "resolved" && severity == "SEV3"]),
       "SEV4": count(*[_type == "incident" && status != "resolved" && severity == "SEV4"])
     },
-    "pendingApprovalsCount": count(*[_type == "escalationApproval" && status == "pending"])
+    "pendingApprovalsCount": count(*[_type == "escalationApproval" && status == "pending"]),
+    "pendingApprovals": *[_type == "escalationApproval" && status == "pending"] | order(_createdAt asc) {
+      _id,
+      requestedSeverity,
+      requiredApprovals,
+      "approvedCount": count(approvals),
+      incident->{_id, title}
+    },
+    "onCallLeads": *[_type == "responder" && role == "on-call-lead"] | order(name asc) {
+      _id,
+      name
+    }
   }
 `);

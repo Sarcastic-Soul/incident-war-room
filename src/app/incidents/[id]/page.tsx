@@ -1,5 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import {
+  ArrowLeftIcon,
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
+} from "@heroicons/react/24/outline";
 import { client } from "@/sanity/lib/client";
 import { formatDateTime, severityBadgeClass, statusBadgeClass } from "../badge-utils";
 import type {
@@ -81,9 +86,10 @@ export default async function IncidentDetailPage({
       <div>
         <Link
           href="/incidents"
-          className="text-sm text-zinc-500 hover:underline dark:text-zinc-400"
+          className="flex items-center gap-1 text-sm text-zinc-500 hover:underline dark:text-zinc-400"
         >
-          ← All incidents
+          <ArrowLeftIcon className="size-4" />
+          All incidents
         </Link>
       </div>
 
@@ -130,8 +136,9 @@ export default async function IncidentDetailPage({
             <form action={raiseToSev1WithId}>
               <button
                 type="submit"
-                className="rounded bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+                className="flex items-center gap-1.5 rounded bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
               >
+                <ExclamationTriangleIcon className="size-4" />
                 Raise to SEV1
               </button>
             </form>
@@ -141,8 +148,9 @@ export default async function IncidentDetailPage({
             <form action={resolveIncidentWithId}>
               <button
                 type="submit"
-                className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+                className="flex items-center gap-1.5 rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
               >
+                <CheckCircleIcon className="size-4" />
                 Mark resolved
               </button>
             </form>
@@ -193,8 +201,9 @@ export default async function IncidentDetailPage({
                     <button
                       type="submit"
                       disabled={alreadyApproved}
-                      className="rounded bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex items-center gap-1.5 rounded bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
+                      <CheckCircleIcon className="size-4" />
                       {alreadyApproved ? `${lead.name} approved` : `Approve as ${lead.name}`}
                     </button>
                   </form>

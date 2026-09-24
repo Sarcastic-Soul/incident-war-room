@@ -67,7 +67,7 @@ export default async function LoginPage({
               name="email"
               required
               autoComplete="username"
-              placeholder="alice@example.com"
+              defaultValue="alice@example.com"
               className="rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black/40 dark:border-white/20 dark:focus:border-white/50"
             />
           </label>
@@ -79,7 +79,7 @@ export default async function LoginPage({
               name="password"
               required
               autoComplete="current-password"
-              placeholder="demo1234"
+              defaultValue="demo1234"
               className="rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black/40 dark:border-white/20 dark:focus:border-white/50"
             />
           </label>
