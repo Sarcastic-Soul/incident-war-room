@@ -1,36 +1,39 @@
 # Incident War Room
 
-A real-time incident-management app built for the dev.to × Sanity "Path Two"
-hackathon (2026-09-16). Next.js 16 (App Router) on the front end, Sanity as
-the content backend, using **Sanity Workflows** and the **Sanity App SDK**
-as functional features rather than decorative ones.
+A real-time incident-management app built for the dev.to × Sanity
+["Path Two" hackathon](https://dev.to/challenges/sanity-2026-09-16). Next.js
+16 on the front end, Sanity as the backend — using **Sanity Workflows** and
+the **Sanity App SDK** for real functionality, not as checkbox features.
+
+**Live demo:** https://incident-war-room-nine.vercel.app
+**Sanity project:** `am9ihg1w` / dataset `production`
+**Login:** seeded test accounts in [`docs/testing-credentials.md`](docs/testing-credentials.md)
 
 ## What it does
 
-- **Incident timeline** — live-updating via Sanity's `listen()` API, no polling.
+- **Live incident timeline** — updates via Sanity's `listen()` API, no polling.
 - **SEV1 escalation gate** — raising an incident to SEV1 opens an
-  `escalationApproval` request that needs sign-off from **2** on-call leads
-  before the severity actually changes. The count check is enforced
-  server-side in a Next.js Server Action
+  `escalationApproval` request needing sign-off from **two** on-call leads
+  before severity actually changes. Enforced server-side
   (`src/app/incidents/[id]/actions.ts`), not just hidden in the UI.
-- **Sanity Workflow** — the `escalationApproval` document type is tracked
-  through `pending → approved/rejected` as a Kanban board in Studio via
-  `sanity-plugin-workflow`. This plugin's own transitions are Studio-side
-  only (its README says so directly) — the real enforcement is the Server
-  Action above. Both exist on purpose, for different jobs.
-- **Postmortem generation** — resolving an incident copies every
-  `timelineEvent` into a frozen `postmortem.timelineSnapshot` (plain
-  objects, not references), so later edits to live timeline events can't
-  rewrite history.
+- **Sanity Workflow** — `escalationApproval` is tracked `pending → approved/rejected`
+  as a Kanban board in Studio (`sanity-plugin-workflow`). Once approved, the
+  same code path flips the incident to `escalated`, publishes a
+  `statusPageEntry`, and can notify an external status-page webhook.
+- **AI-drafted postmortems** — resolving an incident freezes the timeline into
+  a `postmortem` document and asks an LLM (Groq's `openai/gpt-oss-120b`) to
+  draft a root cause and action items from it. A custom Studio input
+  (`src/sanity/components/RootCauseInput.tsx`) adds a "Regenerate with AI"
+  button so an editor can ask for another pass any time.
 - **Ops Dashboard** — a custom Studio tool built with `@sanity/sdk-react`
-  (the Sanity App SDK) showing cross-incident MTTR, open incidents by
-  severity, and pending approvals, computed live from the dataset.
-- **App-level auth** — simple seeded test credentials and an HMAC-signed
-  session cookie, gating `/incidents/*` via `src/proxy.ts`. This is not
-  Sanity Studio's own login; the Studio at `/studio` uses Sanity's auth.
+  (the App SDK): live cross-incident MTTR, open incidents by severity, and a
+  panel to approve pending escalations directly — reusing the same
+  server-enforced gate as the incident page, not a separate write path.
+- **Dark mode + Studio shortcut** in the app header; login form is pre-filled
+  with demo credentials for judges.
 
-See `docs/` for the original planning docs (`overview.md`,
-`architecture.md`, `schema.md`, `why-it-wins.md`) written before the build.
+See [`docs/`](docs/) for the schema (`schema.md`), architecture
+(`architecture.md`), and the original planning docs written before the build.
 
 ## Tech stack
 
@@ -38,8 +41,9 @@ See `docs/` for the original planning docs (`overview.md`,
 - [Sanity](https://www.sanity.io) — schema, GROQ, real-time `listen()`, embedded Studio
 - [`sanity-plugin-workflow`](https://github.com/sanity-io/sanity-plugin-workflow) — Kanban state tracking
 - [`@sanity/sdk` / `@sanity/sdk-react`](https://www.sanity.io/docs/app-sdk) — the App SDK, powering the Ops Dashboard tool
-- Tailwind CSS v4
-- [pnpm](https://pnpm.io) as the package manager
+- [Groq](https://groq.com) (`openai/gpt-oss-120b`) — postmortem drafting
+- Tailwind CSS v4, [Heroicons](https://heroicons.com)
+- [pnpm](https://pnpm.io)
 
 ## Getting started
 
@@ -48,38 +52,27 @@ pnpm install
 cp .env.local.example .env.local
 ```
 
-Fill in `.env.local`:
-
 | Variable | Where to get it |
 |---|---|
-| `NEXT_PUBLIC_SANITY_PROJECT_ID` | Sanity project dashboard (already set to this project's ID) |
+| `NEXT_PUBLIC_SANITY_PROJECT_ID` | Sanity project dashboard (defaults to this project) |
 | `NEXT_PUBLIC_SANITY_DATASET` | `production` |
 | `NEXT_PUBLIC_SANITY_API_VERSION` | any recent date, e.g. `2026-09-24` |
 | `SANITY_API_WRITE_TOKEN` | Sanity project → API → Tokens, needs Editor access |
 | `AUTH_SECRET` | any random 32-byte hex string, e.g. `openssl rand -hex 32` |
-
-Seed the dataset with demo responders and one sample incident:
-
-```bash
-pnpm seed
-```
-
-Run the app:
+| `GROQ_API_KEY` | optional — free key at [console.groq.com](https://console.groq.com/keys); without it, postmortems are just created blank |
+| `STATUS_PAGE_WEBHOOK_URL` | optional — POSTed on SEV1 approval; unset = no-op |
 
 ```bash
+pnpm seed   # demo responders + one sample incident
 pnpm dev
 ```
 
 - App: [http://localhost:3000](http://localhost:3000) (redirects to `/incidents`, login required)
 - Studio: [http://localhost:3000/studio](http://localhost:3000/studio)
 
-Login credentials for the demo are seeded, plaintext, and listed in
-`docs/testing-credentials.md` — this is a hackathon demo, not a real auth
-system.
-
 ## Scripts
 
 - `pnpm dev` — start the dev server
 - `pnpm build` — production build
-- `pnpm seed` — seed responders + a sample incident into the configured dataset
+- `pnpm seed` — seed responders + a sample incident
 - `pnpm lint` — ESLint

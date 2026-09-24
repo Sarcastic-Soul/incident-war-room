@@ -37,6 +37,10 @@ const TEST_CREDENTIALS: Record<string, TestCredential> = {
     password: "demo1234",
     responderId: "responder-carol",
   },
+  "dana@example.com": {
+    password: "demo1234",
+    responderId: "responder-dana",
+  },
 };
 
 function getAuthSecret(): string {

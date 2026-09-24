@@ -51,6 +51,13 @@ const responders: ResponderSeed[] = [
     role: "comms",
     onCallTeam: "Comms",
   },
+  {
+    _id: "responder-dana",
+    _type: "responder",
+    name: "Dana Whitfield",
+    role: "on-call-lead",
+    onCallTeam: "Platform",
+  },
 ];
 
 const seedIncident = {
