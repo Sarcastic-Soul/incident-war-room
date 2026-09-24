@@ -1,4 +1,5 @@
 import { defineArrayMember, defineField, defineType } from "sanity";
+import { RootCauseInput } from "../components/RootCauseInput";
 
 export const postmortem = defineType({
   name: "postmortem",
@@ -57,6 +58,11 @@ export const postmortem = defineType({
       name: "rootCause",
       title: "Root cause",
       type: "text",
+      description:
+        "Drafted by an LLM from the frozen timeline when the incident resolves; edit freely or hit Regenerate for a fresh draft.",
+      components: {
+        input: RootCauseInput,
+      },
     }),
     defineField({
       name: "actionItems",

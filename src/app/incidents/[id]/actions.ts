@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { client, writeClient } from "@/sanity/lib/client";
 import { notifyStatusPageWebhook } from "@/lib/statusPageWebhook";
+import { draftPostmortem } from "@/lib/postmortemDraft";
 
 /**
  * Raises an incident to SEV1 by opening an escalationApproval request.
@@ -124,13 +125,17 @@ export async function approveEscalation(formData: FormData) {
  * docs/schema.md), then flips the incident to "resolved". Runs the
  * snapshot copy and the status flip as two separate writes, but guards on
  * the incident not already being resolved so this can't run twice and
- * create duplicate postmortems.
+ * create duplicate postmortems. Also asks an LLM (see
+ * src/lib/postmortemDraft.ts) to draft a first-pass root cause and action
+ * items from that same timeline — a human still reviews/edits it in the
+ * Studio, but resolving an incident no longer leaves the postmortem
+ * completely blank.
  */
 export async function resolveIncident(incidentId: string) {
   if (!incidentId) return;
 
-  const incident = await client.fetch<{ status?: string } | null>(
-    `*[_id == $incidentId][0]{status}`,
+  const incident = await client.fetch<{ title?: string; status?: string } | null>(
+    `*[_id == $incidentId][0]{title, status}`,
     { incidentId },
   );
 
@@ -150,6 +155,16 @@ export async function resolveIncident(incidentId: string) {
     { incidentId },
   );
 
+  const draft = await draftPostmortem(
+    incident.title ?? "Untitled incident",
+    timelineEvents.map((event) => ({
+      eventType: event.eventType,
+      body: event.body,
+      createdAt: event.createdAt,
+      authorName: event.author?.name,
+    })),
+  );
+
   await writeClient.create({
     _type: "postmortem",
     incident: { _type: "reference", _ref: incidentId },
@@ -161,7 +176,8 @@ export async function resolveIncident(incidentId: string) {
       createdAt: event.createdAt,
       ...(event.author?.name ? { authorName: event.author.name } : {}),
     })),
-    actionItems: [],
+    rootCause: draft?.rootCause ?? "",
+    actionItems: draft?.actionItems ?? [],
   });
 
   await writeClient
