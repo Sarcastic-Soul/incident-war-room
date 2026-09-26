@@ -25,9 +25,18 @@ export function statusBadgeClass(status?: string | null): string {
   return STATUS_STYLES[status ?? ""] ?? FALLBACK_STYLE;
 }
 
+// Fixed locale and time zone: this runs both on the server (UTC on Vercel)
+// and in the browser (the viewer's zone), and the two must agree, or the
+// header and the live timeline on the same page show different clocks.
+const DATE_TIME_FORMAT = new Intl.DateTimeFormat("en-US", {
+  timeZone: "UTC",
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
 export function formatDateTime(value?: string | null): string {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
+  return `${DATE_TIME_FORMAT.format(date)} UTC`;
 }
