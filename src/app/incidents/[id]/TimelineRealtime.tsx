@@ -9,9 +9,13 @@ import { postTimelineEvent } from "./actions";
 // Filtered to this incident only, per docs/architecture.md: every open
 // viewer of an incident should see new timeline events the instant
 // they're created, with no polling and no refresh.
-const TIMELINE_LISTEN_QUERY = `*[_type == "timelineEvent" && incident._ref == $incidentId]{
-  _id, eventType, body, createdAt, author->{_id, name}
-}`;
+// listen() sends whole documents and ignores projections, so `author` comes
+// back as a bare reference; it's matched to a name from `responders` below.
+const TIMELINE_LISTEN_QUERY = `*[_type == "timelineEvent" && incident._ref == $incidentId]`;
+
+type ListenedTimelineEvent = Omit<TimelineEvent, "author"> & {
+  author?: { _ref?: string } | null;
+};
 
 function sortByCreatedAt(events: TimelineEvent[]): TimelineEvent[] {
   return [...events].sort(
@@ -31,28 +35,52 @@ export default function TimelineRealtime({
   incidentId,
   initialEvents,
   responders,
+  currentResponderId,
 }: {
   incidentId: string;
   initialEvents: TimelineEvent[];
   responders: Responder[];
+  currentResponderId: string | null;
 }) {
   const [events, setEvents] = useState<TimelineEvent[]>(() =>
     sortByCreatedAt(initialEvents),
   );
+
+  // Server actions (escalation, resolve) add events and re-render the page
+  // with new initialEvents; merge those in instead of keeping the first
+  // render's list.
+  const [prevInitialEvents, setPrevInitialEvents] = useState(initialEvents);
+  if (initialEvents !== prevInitialEvents) {
+    setPrevInitialEvents(initialEvents);
+    setEvents((prev) =>
+      sortByCreatedAt(dedupeById([...prev, ...initialEvents])),
+    );
+  }
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     const subscription = client
-      .listen<TimelineEvent>(TIMELINE_LISTEN_QUERY, { incidentId })
+      .listen<ListenedTimelineEvent>(TIMELINE_LISTEN_QUERY, { incidentId })
       .subscribe((update) => {
         const doc = update.result;
         if (!doc) return;
 
-        setEvents((prev) => sortByCreatedAt(dedupeById([...prev, doc])));
+        const author = responders.find(
+          (responder) => responder._id === doc.author?._ref,
+        );
+        const event: TimelineEvent = {
+          _id: doc._id,
+          eventType: doc.eventType,
+          body: doc.body,
+          createdAt: doc.createdAt,
+          author: author ? { _id: author._id, name: author.name } : null,
+        };
+
+        setEvents((prev) => sortByCreatedAt(dedupeById([...prev, event])));
       });
 
     return () => subscription.unsubscribe();
-  }, [incidentId]);
+  }, [incidentId, responders]);
 
   const sortedEvents = useMemo(() => sortByCreatedAt(events), [events]);
 
@@ -77,7 +105,7 @@ export default function TimelineRealtime({
               </div>
               <p className="mt-1 text-zinc-800 dark:text-zinc-200">{event.body}</p>
               <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                {event.author?.name ?? "Unknown responder"}
+                {event.author?.name ?? "System"}
               </p>
             </li>
           ))
@@ -96,7 +124,7 @@ export default function TimelineRealtime({
         <div className="flex flex-wrap gap-2">
           <select
             name="authorId"
-            defaultValue=""
+            defaultValue={currentResponderId ?? ""}
             className="rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
           >
             <option value="">Author…</option>

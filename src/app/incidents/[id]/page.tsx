@@ -4,8 +4,10 @@ import {
   ArrowLeftIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
+  MegaphoneIcon,
 } from "@heroicons/react/24/outline";
 import { PortableText, type PortableTextBlock } from "@portabletext/react";
+import { getCurrentResponderId } from "@/lib/auth";
 import { client } from "@/sanity/lib/client";
 import { runbooksForIncidentQuery } from "@/sanity/lib/queries";
 import { formatDateTime, severityBadgeClass, statusBadgeClass } from "../badge-utils";
@@ -40,6 +42,15 @@ const POSTMORTEM_QUERY = `*[_type == "postmortem" && incident._ref == $id] | ord
   "timelineEntryCount": count(timelineSnapshot)
 }`;
 
+const STATUS_PAGE_QUERY = `*[_type == "statusPageEntry" && incident._ref == $id] | order(publishedAt desc)[0]{
+  publicSummary, publishedAt
+}`;
+
+type StatusPageEntry = {
+  publicSummary?: string | null;
+  publishedAt?: string | null;
+};
+
 type PostmortemSummary = {
   _id: string;
   rootCause?: string | null;
@@ -61,13 +72,22 @@ export default async function IncidentDetailPage({
 }) {
   const { id } = await params;
 
-  const [incident, timelineEvents, pendingApproval, responders, postmortem] =
-    await Promise.all([
+  const [
+    incident,
+    timelineEvents,
+    pendingApproval,
+    responders,
+    postmortem,
+    currentResponderId,
+    statusPageEntry,
+  ] = await Promise.all([
       client.fetch<IncidentDetail | null>(INCIDENT_QUERY, { id }),
       client.fetch<TimelineEvent[]>(TIMELINE_QUERY, { id }),
       client.fetch<EscalationApproval | null>(PENDING_APPROVAL_QUERY, { id }),
       client.fetch<Responder[]>(RESPONDERS_QUERY),
       client.fetch<PostmortemSummary | null>(POSTMORTEM_QUERY, { id }),
+      getCurrentResponderId(),
+      client.fetch<StatusPageEntry | null>(STATUS_PAGE_QUERY, { id }),
     ]);
 
   if (!incident) {
@@ -81,9 +101,10 @@ export default async function IncidentDetailPage({
 
   const canRaiseToSev1 =
     incident.severity !== "SEV1" && incident.status !== "resolved";
-  const onCallLeads = responders.filter(
-    (responder) => responder.role === "on-call-lead",
+  const currentResponder = responders.find(
+    (responder) => responder._id === currentResponderId,
   );
+  const isOnCallLead = currentResponder?.role === "on-call-lead";
   const approvedResponderIds = new Set(
     (pendingApproval?.approvals ?? [])
       .map((approval) => approval.approver?._id)
@@ -198,32 +219,46 @@ export default async function IncidentDetailPage({
             )}
           </ul>
 
-          {onCallLeads.length === 0 ? (
+          {!isOnCallLead ? (
             <p className="text-xs text-amber-700 dark:text-amber-400">
-              No on-call-lead responders found to approve.
+              Only on-call leads can approve. You&apos;re logged in as{" "}
+              {currentResponder?.name ?? "an unknown responder"}.
+            </p>
+          ) : approvedResponderIds.has(currentResponder._id) ? (
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              You approved. Waiting on a second on-call lead to log in and
+              approve.
             </p>
           ) : (
-            <div className="flex flex-wrap gap-2">
-              {onCallLeads.map((lead) => {
-                const alreadyApproved = approvedResponderIds.has(lead._id);
-                return (
-                  <form key={lead._id} action={approveEscalation}>
-                    <input type="hidden" name="approvalId" value={pendingApproval._id} />
-                    <input type="hidden" name="incidentId" value={incident._id} />
-                    <input type="hidden" name="responderId" value={lead._id} />
-                    <button
-                      type="submit"
-                      disabled={alreadyApproved}
-                      className="flex items-center gap-1.5 rounded bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <CheckCircleIcon className="size-4" />
-                      {alreadyApproved ? `${lead.name} approved` : `Approve as ${lead.name}`}
-                    </button>
-                  </form>
-                );
-              })}
-            </div>
+            <form action={approveEscalation}>
+              <input type="hidden" name="approvalId" value={pendingApproval._id} />
+              <input type="hidden" name="incidentId" value={incident._id} />
+              <button
+                type="submit"
+                className="flex items-center gap-1.5 rounded bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700"
+              >
+                <CheckCircleIcon className="size-4" />
+                Approve as {currentResponder.name}
+              </button>
+            </form>
           )}
+        </section>
+      )}
+
+      {statusPageEntry && (
+        <section className="flex flex-col gap-1 rounded-lg border border-sky-300 bg-sky-50 p-4 dark:border-sky-800 dark:bg-sky-950/30">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="flex items-center gap-1.5 text-sm font-semibold text-sky-900 dark:text-sky-200">
+              <MegaphoneIcon className="size-4" />
+              Published to status page
+            </h2>
+            <span className="text-xs text-sky-700 dark:text-sky-400">
+              {formatDateTime(statusPageEntry.publishedAt)}
+            </span>
+          </div>
+          <p className="text-sm text-sky-900 dark:text-sky-200">
+            {statusPageEntry.publicSummary}
+          </p>
         </section>
       )}
 
@@ -300,6 +335,7 @@ export default async function IncidentDetailPage({
           incidentId={incident._id}
           initialEvents={timelineEvents}
           responders={responders}
+          currentResponderId={currentResponderId}
         />
       </section>
     </div>

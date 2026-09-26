@@ -63,32 +63,21 @@ function PendingApprovalsPanel({
               </Text>
             </Flex>
 
-            {data.onCallLeads.length === 0 ? (
-              <Text size={1} muted>
-                No on-call-lead responders found to approve.
-              </Text>
-            ) : (
-              <Flex gap={2} wrap="wrap">
-                {data.onCallLeads.map((lead) => (
-                  <form key={lead._id} action={approveEscalation}>
-                    <input type="hidden" name="approvalId" value={approval._id} />
-                    <input
-                      type="hidden"
-                      name="incidentId"
-                      value={approval.incident?._id ?? ""}
-                    />
-                    <input type="hidden" name="responderId" value={lead._id} />
-                    <Button
-                      type="submit"
-                      mode="ghost"
-                      tone="positive"
-                      icon={CheckmarkCircleIcon}
-                      text={`Approve as ${lead.name}`}
-                    />
-                  </form>
-                ))}
-              </Flex>
-            )}
+            <form action={approveEscalation}>
+              <input type="hidden" name="approvalId" value={approval._id} />
+              <input
+                type="hidden"
+                name="incidentId"
+                value={approval.incident?._id ?? ""}
+              />
+              <Button
+                type="submit"
+                mode="ghost"
+                tone="positive"
+                icon={CheckmarkCircleIcon}
+                text="Approve"
+              />
+            </form>
           </Stack>
         </Card>
       ))}
@@ -110,7 +99,8 @@ function OpsDashboardContent() {
           escalationApproval document in this dataset — powered by the
           Sanity App SDK (@sanity/sdk-react). Approving below runs the same
           server-enforced 2-approver gate as the incident page — this isn&apos;t
-          a separate, weaker write path.
+          a separate, weaker write path. You approve as whoever you&apos;re
+          logged into the app as, and only on-call leads count.
         </Text>
         <Grid gridTemplateColumns={[1, 2, 3]} gap={3}>
           <StatTile

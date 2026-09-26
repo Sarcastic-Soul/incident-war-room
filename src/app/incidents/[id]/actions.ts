@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { client, writeClient } from "@/sanity/lib/client";
 import { notifyStatusPageWebhook } from "@/lib/statusPageWebhook";
 import { draftPostmortem } from "@/lib/postmortemDraft";
+import { getCurrentResponderId } from "@/lib/auth";
 
 /**
  * Raises an incident to SEV1 by opening an escalationApproval request.
@@ -17,6 +18,14 @@ import { draftPostmortem } from "@/lib/postmortemDraft";
  */
 export async function raiseToSev1(incidentId: string) {
   if (!incidentId) return;
+
+  // One open request per incident: a double-click or a second responder
+  // hitting the button shouldn't start a parallel approval.
+  const existing = await client.fetch<string | null>(
+    `*[_type == "escalationApproval" && incident._ref == $incidentId && status == "pending"][0]._id`,
+    { incidentId },
+  );
+  if (existing) return;
 
   await writeClient.create({
     _type: "escalationApproval",
@@ -43,35 +52,47 @@ export async function raiseToSev1(incidentId: string) {
  */
 export async function approveEscalation(formData: FormData) {
   const approvalId = formData.get("approvalId");
-  const responderId = formData.get("responderId");
   const incidentId = formData.get("incidentId");
 
   if (
     typeof approvalId !== "string" ||
-    typeof responderId !== "string" ||
     typeof incidentId !== "string" ||
-    !approvalId ||
-    !responderId
+    !approvalId
   ) {
     return;
   }
 
-  const current = await client.fetch<{
-    approvals?: unknown[];
-    requiredApprovals?: number;
-    requestedSeverity?: string;
-    status?: string;
-  } | null>(
-    `*[_id == $approvalId][0]{approvals, requiredApprovals, requestedSeverity, status}`,
-    { approvalId },
-  );
+  // The approver is whoever is logged in, never a value from the form, so
+  // one lead can't sign off on behalf of the other.
+  const responderId = await getCurrentResponderId();
+  if (!responderId) return;
 
-  if (!current || current.status !== "pending") {
-    return;
-  }
+  const [current, approver] = await Promise.all([
+    client.fetch<{
+      _rev: string;
+      approvals?: Array<{ approver?: { _ref?: string } }>;
+      requiredApprovals?: number;
+      requestedSeverity?: string;
+      status?: string;
+    } | null>(
+      `*[_id == $approvalId][0]{_rev, approvals, requiredApprovals, requestedSeverity, status}`,
+      { approvalId },
+    ),
+    client.fetch<{ role?: string } | null>(`*[_id == $responderId][0]{role}`, {
+      responderId,
+    }),
+  ]);
 
+  if (!current || current.status !== "pending") return;
+  if (approver?.role !== "on-call-lead") return;
+  if (current.approvals?.some((a) => a.approver?._ref === responderId)) return;
+
+  // ifRevisionId makes this fail if another approval landed since the read
+  // above, so two leads approving at the same moment can't both count as
+  // "the first" and skip the escalation.
   await writeClient
     .patch(approvalId)
+    .ifRevisionId(current._rev)
     .setIfMissing({ approvals: [] })
     .append("approvals", [
       {
@@ -100,6 +121,19 @@ export async function approveEscalation(formData: FormData) {
       .patch(incidentId)
       .set({ status: "escalated", severity })
       .commit();
+
+    const approverNames = await client.fetch<string[]>(
+      `*[_id == $approvalId][0].approvals[].approver->name`,
+      { approvalId },
+    );
+
+    await writeClient.create({
+      _type: "timelineEvent",
+      incident: { _type: "reference", _ref: incidentId },
+      eventType: "severityChange",
+      body: `Escalated to ${severity}, approved by ${approverNames.join(" and ")}.`,
+      createdAt: new Date().toISOString(),
+    });
 
     await writeClient.create({
       _type: "statusPageEntry",
@@ -140,6 +174,18 @@ export async function resolveIncident(incidentId: string) {
   );
 
   if (!incident || incident.status === "resolved") return;
+
+  // Log the resolution itself first, so it's part of the frozen snapshot
+  // and the postmortem draft sees when the incident ended.
+  const resolverId = await getCurrentResponderId();
+  await writeClient.create({
+    _type: "timelineEvent",
+    incident: { _type: "reference", _ref: incidentId },
+    ...(resolverId ? { author: { _type: "reference", _ref: resolverId } } : {}),
+    eventType: "statusChange",
+    body: "Marked resolved.",
+    createdAt: new Date().toISOString(),
+  });
 
   const timelineEvents = await client.fetch<
     Array<{
@@ -189,9 +235,9 @@ export async function resolveIncident(incidentId: string) {
 }
 
 /**
- * Creates a new timelineEvent document. Kept intentionally minimal: the
- * author is a plain responder picker for now (auth-derived authorship
- * will be wired in by the auth agent later).
+ * Creates a new timelineEvent document. The author picker defaults to the
+ * logged-in responder but can be changed, e.g. to log something a
+ * teammate said on the bridge call.
  */
 export async function postTimelineEvent(formData: FormData) {
   const incidentId = formData.get("incidentId");

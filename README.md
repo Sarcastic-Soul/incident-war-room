@@ -15,7 +15,9 @@ the **Sanity App SDK** for real functionality, not as checkbox features.
 - **SEV1 escalation gate** — raising an incident to SEV1 opens an
   `escalationApproval` request needing sign-off from **two** on-call leads
   before severity actually changes. Enforced server-side
-  (`src/app/incidents/[id]/actions.ts`), not just hidden in the UI.
+  (`src/app/incidents/[id]/actions.ts`), not just hidden in the UI: the
+  approver is always the logged-in responder, must be an on-call lead, and
+  can't approve twice, so one person can't push a SEV1 through alone.
 - **Sanity Workflow** — `escalationApproval` is tracked `pending → approved/rejected`
   as a Kanban board in Studio (`sanity-plugin-workflow`). Once approved, the
   same code path flips the incident to `escalated`, publishes a
@@ -66,7 +68,7 @@ cp .env.local.example .env.local
 | `STATUS_PAGE_WEBHOOK_URL` | optional — POSTed on SEV1 approval; unset = no-op |
 
 ```bash
-pnpm seed   # demo responders + one sample incident
+pnpm seed   # demo responders, 3 sample incidents, 2 runbooks
 pnpm dev
 ```
 
@@ -77,5 +79,5 @@ pnpm dev
 
 - `pnpm dev` — start the dev server
 - `pnpm build` — production build
-- `pnpm seed` — seed responders + a sample incident
+- `pnpm seed` — seed responders, sample incidents and runbooks; re-running resets the demo
 - `pnpm lint` — ESLint
