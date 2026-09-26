@@ -1,10 +1,3 @@
-<!--
-Draft for the DEV submission post. Tag #sanitychallenge on publish.
-Before publishing: upload the demo video to YouTube and put its link in
-the {% embed %} line below. The two Studio screenshots are optional (the
-Studio needs a Sanity login, so they have to be taken by hand).
--->
-
 # Incident War Room: an incident-response tool where the approval gate and the AI can't be faked out
 
 **Live demo:** https://incident-war-room-nine.vercel.app
@@ -12,7 +5,7 @@ Studio needs a Sanity login, so they have to be taken by hand).
 **Sanity project:** `am9ihg1w` / dataset `production`
 **Testing credentials:** see [`docs/testing-credentials.md`](https://github.com/Sarcastic-Soul/incident-war-room/blob/master/docs/testing-credentials.md) in the repo — there are two on-call-lead accounts on purpose, you need both to see the escalation gate go through end to end.
 
-{% embed https://www.youtube.com/watch?v=YOUR_VIDEO_ID %}
+{% embed https://youtu.be/5JVUoHkKi0c %}
 
 ## What it is
 
@@ -96,8 +89,6 @@ uses. Same gate, same 2-approver rule, same "you approve as whoever you're
 logged in as", called from inside Sanity Studio instead of the app. No
 separate, weaker write path just because it's convenient.
 
-<!-- Optional: screenshot of the Ops Dashboard tool in Studio (stat tiles + pending approvals panel). -->
-
 ## Where an actual agent moves the work forward
 
 This is the piece I added specifically because "an agent moves a draft
@@ -118,8 +109,6 @@ blank, same as before this existed. It never blocks resolution if the call
 fails.
 
 ![Escalated, published to the status page, resolved, and the AI-drafted postmortem](https://raw.githubusercontent.com/Sarcastic-Soul/incident-war-room/master/docs/screenshots/escalated-and-postmortem.png)
-
-<!-- Optional: screenshot of the postmortem in Studio with the Regenerate with AI button. -->
 
 ## What was actually hard
 
